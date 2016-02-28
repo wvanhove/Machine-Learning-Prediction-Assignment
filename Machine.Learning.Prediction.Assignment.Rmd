@@ -1,0 +1,92 @@
+---
+title: "Machine Learning - Prediction Assignment"
+author: "WV"
+date: "February 28, 2016"
+output: html_document
+---
+
+# Synopsis
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).  
+
+# Set up working session
+Load the necessary libraries and clear our local environment.
+```{r}
+library(ggplot2)
+library(lattice)
+library(caret)
+library(randomForest)
+library(rpart)
+
+rm(list=ls())
+```
+
+And then load the data necessary for our assignment.
+```{r}
+set.seed(34334)
+TrainingSet <-read.csv("pml-training.csv",header = TRUE,na.strings=c("#DIV/0!","","NA"))
+TestingSet  <-read.csv("pml-testing.csv",header = TRUE,na.strings=c("#DIV/0!","","NA"))
+```
+
+# Data Preprocessing and Transformation
+*Training Set*
+```{r}
+dim(TrainingSet)
+```
+
+Ensure the columns for prediction are numeric:
+```{r}
+for(i in c(8:ncol(TrainingSet)-1)) {TrainingSet[,i] = as.numeric(as.character(TrainingSet[,i]))}
+for(i in c(8:ncol(TestingSet)-1)) {TestingSet[,i] = as.numeric(as.character(TestingSet[,i]))}
+```
+
+There are some almost completely blank columns in the data that do not contribute well to prediction, so a feature dataset is created.  This dataset will only include complete columns, as well as remove columns such as user name, timestamps and windows.
+
+Create the feature dataset and display the columns left.
+```{r}
+feature_columns <- colnames(TrainingSet[colSums(is.na(TrainingSet)) == 0])[-(1:7)]
+finalTrain <- TrainingSet[feature_columns]
+feature_columns
+```
+
+# Model Building
+The model is now built from our final training set.
+```{r}
+test_set <- createDataPartition(y=finalTrain$classe, p=0.75, list=FALSE )
+training <- finalTrain[test_set,]
+testing <- finalTrain[-test_set,]
+```
+
+We will train our prediction model using random forest design to predict the variable 'classe', the weight lifting quality in the training set.
+```{r}
+model <- train(classe ~ ., data=training, method = "rf", tuneLength = 1, ntree = 25)
+print(model)
+```
+
+# Evaluate the Model
+We can evaluate the prediction model using a confussion matrix versus the validation data set.
+```{r}
+confusionMatrix(predict(model, testing), testing$classe)
+```
+
+Additionally, we can view a visual represenation of the accuracy:
+```{r}
+plot(predict(model,newdata=testing[,-ncol(testing)]),testing$classe, xlab="Testing Set", ylab="Prediction Model Set",col = c("black","blue", "red","orange","yellow"))
+```
+
+# Accuracy of the Prediction Model
+Compute the accuracy of the model:
+```{r}
+count_accurate <- c(as.numeric(predict(model,newdata=testing[,-ncol(testing)])==testing$classe))
+accuracy <- sum(count_accurate)*100/nrow(testing)
+message("Prediction model accuracy applied to testing data = ", format(round(accuracy, 2), nsmall=2),"%")
+```
+
+# Conclusion
+Our random forest prediction model is quite accurate when used against our test set of data, with an accuracy of 99.29%.  However, due to overfitting often caused by random forests, this number must be used with caution.
+
+# Prediction on the original testing set
+Now a look at the original testing set given with the problem:
+```{r}
+final_pred <- predict(model,TestingSet)
+print(final_pred)
+```
